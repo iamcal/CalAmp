@@ -21,6 +21,10 @@ int init();
 int timer();
 void fetch_url(char query[255]);
 
+void start_inet();
+void stop_inet();
+
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 VOID CALLBACK InternetStatusCallback(HINTERNET hInternet, DWORD dwContext, DWORD dwInternetStatus, LPVOID lpvStatusInformation, DWORD dwStatusInformationLength);
 
@@ -36,8 +40,8 @@ UINT		g_timer;
 UINT		g_interval = 500;
 char		g_TrackName[255];
 int		g_CurrentState = 0;
+int		g_Count = 1;
 HINTERNET	g_InetHandle;
-HINTERNET	g_RequestHandle;
 boolean		g_InetOk;
 char		g_RootUrl[255] = "http://www.your-url.com/script.php";
 
@@ -61,21 +65,11 @@ void config() {
 
 void quit() {
 	KillTimer(plugin.hwndParent, g_timer);
-	fetch_url(""); //stop the current track
-	if (g_InetOk) InternetCloseHandle(g_InetHandle);
+	fetch_url(""); // stop the current track
+	stop_inet(); // hmm - will the last request work if we stop here?
 }
 
-
 int init() {
-
-	g_RequestHandle = NULL;
-
-	g_InetHandle = InternetOpen(szAppName, PRE_CONFIG_INTERNET_ACCESS, NULL, 0, INTERNET_FLAG_ASYNC );
-	InternetSetStatusCallback(g_InetHandle, &InternetStatusCallback);
-	g_InetOk = (g_InetHandle != NULL);
-	if (!g_InetOk){
-		MessageBox(plugin.hwndParent, "failed to start inet services...", "status", MB_OK | MB_SYSTEMMODAL);
-	}
 
 	{
 		static char c[512];
@@ -83,7 +77,7 @@ int init() {
 		GetModuleFileName(plugin.hDllInstance, filename,sizeof(filename));
 		p = filename+lstrlen(filename);
 		while (p >= filename && *p != '\\') p--;
-		wsprintf((plugin.description=c),"%s Plug-In v1.0 (%s)",szAppName,p+1);
+		wsprintf((plugin.description=c),"%s Plug-In v1.02 (%s)",szAppName,p+1);
 	}
 
 	lpWndProcOld = (void *) GetWindowLong(plugin.hwndParent, GWL_WNDPROC);
@@ -136,13 +130,29 @@ int timer() {
 void fetch_url(char query[255]){
 	int		flags;
 	char		url[255];
+	HINTERNET	l_Request;
 
-	if (g_InetOk){
-		if (g_RequestHandle) InternetCloseHandle(g_RequestHandle);
-		flags = INTERNET_FLAG_RELOAD || INTERNET_FLAG_DONT_CACHE || INTERNET_FLAG_EXISTING_CONNECT;
-		strcpy(url, g_RootUrl);
-		strcat(url, query);
-		g_RequestHandle = InternetOpenUrl( g_InetHandle, url, NULL, -1, flags , 1 );
+	stop_inet(); // only stops if running...
+	start_inet();
+
+	flags = INTERNET_FLAG_RELOAD || INTERNET_FLAG_DONT_CACHE || INTERNET_FLAG_EXISTING_CONNECT;
+	strcpy(url, g_RootUrl);
+	strcat(url, query);
+	InternetOpenUrl( g_InetHandle, url, NULL, -1, flags , g_Count++ );
+}
+
+
+void stop_inet(){
+	if (g_InetOk) InternetCloseHandle(g_InetHandle);
+}
+
+
+void start_inet(){
+	g_InetHandle = InternetOpen(szAppName, PRE_CONFIG_INTERNET_ACCESS, NULL, 0, INTERNET_FLAG_ASYNC );
+	InternetSetStatusCallback(g_InetHandle, &InternetStatusCallback);
+	g_InetOk = (g_InetHandle != NULL);
+	if (!g_InetOk){
+		MessageBox(plugin.hwndParent, "Failed to start INET services...", "status", MB_OK | MB_SYSTEMMODAL);
 	}
 }
 
@@ -180,6 +190,7 @@ VOID CALLBACK InternetStatusCallback(HINTERNET hInternet, DWORD dwContext, DWORD
 
 	if (dwInternetStatus == INTERNET_STATUS_REQUEST_COMPLETE){
 		INTERNET_ASYNC_RESULT *lpResult = lpvStatusInformation;
+
 		if(lpResult->dwError != ERROR_SUCCESS){
 			char error[255];
 			char error_code[10];
@@ -187,11 +198,10 @@ VOID CALLBACK InternetStatusCallback(HINTERNET hInternet, DWORD dwContext, DWORD
 			strcpy(error, "Error status: ");
 			strcat(error, error_code);
 			// uncomment this line to see failue reports
-			//MessageBox(plugin.hwndParent, error, "status", MB_OK | MB_SYSTEMMODAL);
+			//MessageBox(plugin.hwndParent, error, "status", MB_OK);
 		}
 		// request is complete - close it now
-		InternetCloseHandle(g_RequestHandle);
-		g_RequestHandle = NULL;
+		InternetCloseHandle(hInternet);
 	}
 
 	return;
