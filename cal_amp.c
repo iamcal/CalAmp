@@ -37,8 +37,9 @@ UINT		g_interval = 500;
 char		g_TrackName[255];
 int		g_CurrentState = 0;
 HINTERNET	g_InetHandle;
+HINTERNET	g_RequestHandle;
 boolean		g_InetOk;
-char		g_RootUrl[255] = "http://amp.iamcal.com/update_database.php";
+char		g_RootUrl[255] = "http://www.your-url.com/script.php";
 
 winampGeneralPurposePlugin plugin = {
 	GPPHDR_VER,
@@ -61,15 +62,20 @@ void config() {
 void quit() {
 	KillTimer(plugin.hwndParent, g_timer);
 	fetch_url(""); //stop the current track
-	InternetCloseHandle(g_InetHandle);
+	if (g_InetOk) InternetCloseHandle(g_InetHandle);
 }
 
 
 int init() {
 
+	g_RequestHandle = NULL;
+
 	g_InetHandle = InternetOpen(szAppName, PRE_CONFIG_INTERNET_ACCESS, NULL, 0, INTERNET_FLAG_ASYNC );
 	InternetSetStatusCallback(g_InetHandle, &InternetStatusCallback);
 	g_InetOk = (g_InetHandle != NULL);
+	if (!g_InetOk){
+		MessageBox(plugin.hwndParent, "failed to start inet services...", "status", MB_OK | MB_SYSTEMMODAL);
+	}
 
 	{
 		static char c[512];
@@ -130,14 +136,13 @@ int timer() {
 void fetch_url(char query[255]){
 	int		flags;
 	char		url[255];
-	HINTERNET	hRequest;
 
 	if (g_InetOk){
+		if (g_RequestHandle) InternetCloseHandle(g_RequestHandle);
 		flags = INTERNET_FLAG_RELOAD || INTERNET_FLAG_DONT_CACHE || INTERNET_FLAG_EXISTING_CONNECT;
 		strcpy(url, g_RootUrl);
 		strcat(url, query);
-		hRequest = InternetOpenUrl( g_InetHandle, url, NULL, -1, flags , 1 );
-		InternetCloseHandle(hRequest);
+		g_RequestHandle = InternetOpenUrl( g_InetHandle, url, NULL, -1, flags , 1 );
 	}
 }
 
@@ -172,6 +177,22 @@ VOID CALLBACK InternetStatusCallback(HINTERNET hInternet, DWORD dwContext, DWORD
 
 	// uncomment this line to see connection statuses
 	//MessageBox(plugin.hwndParent, message, "status", MB_OK | MB_SYSTEMMODAL);
+
+	if (dwInternetStatus == INTERNET_STATUS_REQUEST_COMPLETE){
+		INTERNET_ASYNC_RESULT *lpResult = lpvStatusInformation;
+		if(lpResult->dwError != ERROR_SUCCESS){
+			char error[255];
+			char error_code[10];
+			sprintf(error_code, "%d", lpResult->dwError);
+			strcpy(error, "Error status: ");
+			strcat(error, error_code);
+			// uncomment this line to see failue reports
+			//MessageBox(plugin.hwndParent, error, "status", MB_OK | MB_SYSTEMMODAL);
+		}
+		// request is complete - close it now
+		InternetCloseHandle(g_RequestHandle);
+		g_RequestHandle = NULL;
+	}
 
 	return;
 }
