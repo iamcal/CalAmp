@@ -1,0 +1,119 @@
+<?
+	include("../includes/network.txt");
+	mysql_select_db('cal_misc');
+
+	$time = time();
+
+	################################################################
+
+	function stop_current(){
+		global $db, $time;
+
+		$row = mysql_fetch_array(mysql_query("SELECT * FROM amp_log ORDER BY date_start DESC LIMIT 1", $db));
+		if ($row[date_stop] == 0){
+			if ($row[date_start] > time() - 60){
+				# been playing for less than 60 seconds - cull it
+				mysql_query("DELETE FROM amp_log WHERE id=$row[id]", $db);
+			} else {
+				mysql_query("UPDATE amp_log SET date_stop=$time WHERE id=$row[id]", $db);
+			}
+		}
+	}
+
+	################################################################
+
+	function stop_overruns(){
+		global $db, $time;
+
+		$max = 20 * 60; # auto stop after 20 minutes
+		mysql_query("UPDATE amp_log SET date_stop=date_start+$max WHERE date_stop=0 AND date_start<$time-$max", $db);
+
+		# stop tracks that are still playing but aren't the most recent to have been started...
+
+		list($current_id) = mysql_fetch_array(mysql_query("SELECT id FROM amp_log WHERE date_stop=0 ORDER BY date_start DESC LIMIT 1", $db));
+		mysql_query("UPDATE amp_log SET date_stop=$time WHERE date_stop=0 AND id!=$current_id", $db);
+	}
+
+	################################################################
+
+	function insert_track($track, $start=0, $stop=0){
+		global $db, $time;
+
+		list($artist, $album, $trackname) = explode('-', $track, 3);
+		if (!$trackname){$trackname = $album; $album = '';}
+		if (!$trackname){$trackname = $artist; $artist = '';}
+
+		$trackname	= trim($trackname);
+		$artist		= trim($artist);
+		$album		= trim($album);
+
+		if (preg_match("/^\d+\.?\s+(.*)$/", $trackname, $matches)){
+			$trackname = $matches[1];
+		}
+
+		if (!$start){$start = $time;}
+
+		mysql_query("INSERT INTO amp_log (track, trackname, artist, album, date_start, date_stop) VALUES ('$track', '$trackname', '$artist', '$album', '$start', '$stop')", $db);
+	}
+
+	################################################################
+
+	function insert_track_row($row, $no_track_link=0, $no_artist_link=0, $no_album_link=0){
+		global $db;
+
+		$track_enc = AddSlashes($row[track]);
+		list($count) = mysql_fetch_array(mysql_query("SELECT COUNT(*) FROM amp_log WHERE track='$track_enc'", $db));
+
+		echo "\t<tr class=\"entry\">\n";
+
+		if ($row[trackname]){
+			$track_html = htmlentities($row[trackname]);
+			$track_url = urlencode($row[trackname]);
+			if ($no_track_link){
+				echo "\t\t<td>$track_html</td>\n";
+			}else{
+				echo "\t\t<td><a href=\"track.php?trackname=$track_url\">$track_html</a></td>\n";
+			}
+		}else{
+			echo "\t\t<td>Unknown</td>\n";
+		}
+
+		if ($row[artist]){
+			$artist_html = htmlentities($row[artist]);
+			$artist_url = urlencode($row[artist]);
+			if ($no_artist_link){
+				echo "\t\t<td>$artist_html</td>\n";
+			}else{
+				echo "\t\t<td><a href=\"artist.php?artist=$artist_url\">$artist_html</a></td>\n";
+			}
+		}else{
+			echo "\t\t<td>&nbsp;</td>\n";
+		}
+
+		if ($row[album]){
+			$album_html = htmlentities($row[album]);
+			$album_url = urlencode($row[album]);
+			if ($no_album_link){
+				echo "\t\t<td>$album_html</td>\n";
+			}else{
+				echo "\t\t<td><a href=\"album.php?album=$album_url\">$album_html</a></td>\n";
+			}
+		}else{
+			echo "\t\t<td>&nbsp;</td>\n";
+		}
+
+		$date = date('H:i, j/m/y', $row[date_start]);
+		$date = str_replace(" ", "&nbsp;", $date);
+		echo "\t\t<td>$date</td>\n";
+
+		$label = "$count&nbsp;times";
+		if ($count==1){$label = "once";}
+		if ($count==2){$label = "twice";}
+		echo "\t\t<td>$label</td>\n";
+
+		echo "\t</tr>\n";
+	}
+
+	################################################################
+
+?>

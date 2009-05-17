@@ -1,0 +1,40 @@
+<html>
+<head>
+<title>Cal Amp</title>
+<style>
+
+body {
+	background-color: #ffffff;
+	color: #000000;
+	font-family: arial, sans-serif;
+}
+
+tr.heading {
+	background-color: #dddddd;
+}
+
+tr.entry {
+	background-color: #eeeeee;
+}
+
+.block {
+	background-color: #eeeeee;
+	padding: 10px;
+}
+
+</style>
+</head>
+<body>
+
+<h1>Cal Amp</h1>
+
+Cal Amp is a database of what cal is currently listening to and what he's listened to in the past.<br>
+<br>
+<? if ($home){ ?>
+<a href="all.php">Click here</a> for a listing of all the tracks ever (warning: big page).<br>
+<br>
+Cal Amp uses the custom built <a href="download.php">Cal Amp Plugin</a>, which is open source.<br>
+<? }else{ ?>
+<a href="./">Click here</a> for a listing of recent tracks.<br>
+<? } ?>
+<br>
